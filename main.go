@@ -5,19 +5,22 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 )
 
 type task struct {
-	text   string
-	id     int
-	status bool
+	Text   string `json:"text"`
+	ID     int    `json:"id"`
+	Status bool   `json:"status"`
 }
 
 var tasks []task
+var nextID int
 
 func main() {
-	http.HandleFunc("/task", taskHandler)
-	http.HandleFunc("/list", tasklistHandler)
+	http.HandleFunc("/addtask", addtaskHandler)
+	http.HandleFunc("/list", listHandler)
+	http.HandleFunc("/status", statusHandler)
 
 	log.Println("server start")
 	err := http.ListenAndServe("localhost:8080", nil)
@@ -26,35 +29,86 @@ func main() {
 	}
 }
 
-func taskHandler(w http.ResponseWriter, r *http.Request) {
+func addtaskHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case http.MethodGet:
-		gettask(w, r)
 	case http.MethodPost:
-		posttask(w, r)
+		addtask(w, r)
 	default:
 		http.Error(w, "ivalid method", http.StatusMethodNotAllowed)
+		fmt.Println("addtask invalid method")
 	}
 }
 
-func gettask(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(tasks)
-	fmt.Println("get tasks", tasks)
-}
-
-func posttask(w http.ResponseWriter, r *http.Request) {
-	var tasks task
-	err := json.NewDecoder(r.Body).Decode(&tasks)
+func addtask(w http.ResponseWriter, r *http.Request) {
+	var t task
+	err := json.NewDecoder(r.Body).Decode(&t)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	tasks = append(tasks, task)
+	t.ID = nextID
+	nextID++
+
+	tasks = append(tasks, t) // Добавляем в глобальный слайс
+
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].ID < tasks[j].ID
+	})
+
 	w.WriteHeader(http.StatusCreated)
-	fmt.Println("post new task", tasks)
+	fmt.Fprintln(w, "task added")
 }
 
-func tasklistHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("web serner works correctly")
+func listHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		json.NewEncoder(w).Encode(tasks)
+		fmt.Println("tasks list send", tasks)
+	default:
+		http.Error(w, "invalid method", http.StatusMethodNotAllowed)
+		fmt.Println("list invalid method")
+	}
+
+}
+
+func statusHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPatch:
+		changestatus(w, r)
+	default:
+		http.Error(w, "invalid method", http.StatusMethodNotAllowed)
+	}
+}
+
+func changestatus(w http.ResponseWriter, r *http.Request) {
+	type update struct {
+		ID     int
+		Status bool
+	}
+
+	var upd update
+	err := json.NewDecoder(r.Body).Decode(&upd)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		fmt.Println("bad request")
+	}
+
+	found := false
+	for i, t := range tasks {
+		if t.ID == upd.ID {
+			tasks[i].Status = upd.Status
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		http.Error(w, "task not found. check ID", http.StatusNotFound)
+		fmt.Println("task not found. check ID")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "status updated")
 }

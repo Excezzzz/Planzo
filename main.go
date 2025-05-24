@@ -50,6 +50,7 @@ func addtask(w http.ResponseWriter, r *http.Request) {
 
 	t.ID = nextID
 	nextID++
+	t.ID = len(tasks) + 1
 
 	tasks = append(tasks, t) // Добавляем в глобальный слайс
 
@@ -139,7 +140,8 @@ func deletetask(w http.ResponseWriter, r *http.Request) {
 	for i, t := range tasks {
 		if t.ID == del.ID {
 			tasks = append(tasks[:i], tasks[i+1:]...)
-			break
+			reorderIDs()
+			return
 		}
 	}
 
@@ -151,4 +153,10 @@ func deletetask(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Println(w, "task deleted")
+}
+
+func reorderIDs() {
+	for i := range tasks {
+		tasks[i].ID = i + 1
+	}
 }

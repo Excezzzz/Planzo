@@ -21,6 +21,7 @@ func main() {
 	http.HandleFunc("/addtask", addtaskHandler)
 	http.HandleFunc("/list", listHandler)
 	http.HandleFunc("/status", statusHandler)
+	http.HandleFunc("/deletetask", deletetaskHandler)
 
 	log.Println("server start")
 	err := http.ListenAndServe("localhost:8080", nil)
@@ -111,4 +112,43 @@ func changestatus(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "status updated")
+}
+
+func deletetaskHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodDelete:
+		deletetask(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func deletetask(w http.ResponseWriter, r *http.Request) {
+	type deletetask struct {
+		ID int
+	}
+
+	var del deletetask
+	err := json.NewDecoder(r.Body).Decode(&del)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	founddel := false
+	for i, t := range tasks {
+		if t.ID == del.ID {
+			tasks = append(tasks[:i], tasks[i+1:]...)
+			break
+		}
+	}
+
+	if !founddel {
+		http.Error(w, "task not found. check ID", http.StatusNotFound)
+		fmt.Println("task not found. check ID")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Println(w, "task deleted")
 }
